@@ -396,7 +396,7 @@
   <button class="tab"         onclick="switchTab('history')">Histórico</button>
 </div>
 
-<!-- ═══════════════ CARD PANEL ═══════════════ -->
+<!-- CARD PANEL -->
 <div class="panel active" id="panel-card">
 
   <!-- Live preview -->
@@ -458,7 +458,7 @@
 
 </div>
 
-<!-- ═══════════════ READ PANEL ═══════════════ -->
+<!-- READ PANEL -->
 <div class="panel" id="panel-read">
   <div class="status-card">
     <div class="status-dot" id="read-dot"></div>
@@ -473,7 +473,7 @@
   </div>
 </div>
 
-<!-- ═══════════════ WRITE PANEL ═══════════════ -->
+<!-- WRITE PANEL -->
 <div class="panel" id="panel-write">
   <div class="status-card">
     <div class="status-dot" id="write-dot"></div>
@@ -503,7 +503,7 @@
   <button class="btn-stop" id="btn-stop-write" onclick="stopWrite()" style="display:none">Cancelar</button>
 </div>
 
-<!-- ═══════════════ HISTORY PANEL ═══════════════ -->
+<!-- HISTORY PANEL -->
 <div class="panel" id="panel-history">
   <div class="history-header">
     <span class="history-title" id="history-count">0 leituras salvas</span>
@@ -515,14 +515,14 @@
 </div>
 
 <script>
-// ─── State ───────────────────────────────────────────────
+//  State ----------
 const NFCSupported = 'NDEFReader' in window;
 let scanReader = null;
 let writeReader = null;
 let cardReader = null;
 let readHistory = JSON.parse(localStorage.getItem('nfc-history') || '[]');
 
-// ─── Init ────────────────────────────────────────────────
+//  Init -----------
 document.getElementById('support-label').textContent = NFCSupported
   ? 'Web NFC disponível ✓'
   : 'Web NFC não suportado neste browser';
@@ -543,7 +543,7 @@ if (!NFCSupported) {
 updateCardPreview();
 renderHistory();
 
-// ─── Tabs ─────────────────────────────────────────────────
+// Tabs ------------
 const TAB_NAMES = ['card','read','write','history'];
 
 function switchTab(tab) {
@@ -554,7 +554,7 @@ function switchTab(tab) {
   document.getElementById('panel-' + tab).classList.add('active');
 }
 
-// ─── vCard ────────────────────────────────────────────────
+// vCard -----------
 function buildVCF() {
   const name  = document.getElementById('vc-name').value.trim();
   const title = document.getElementById('vc-title').value.trim();
@@ -665,7 +665,7 @@ function setCardStatus(state, msg) {
   document.getElementById('card-status').textContent = msg;
 }
 
-// ─── Read ─────────────────────────────────────────────────
+// Read --------------
 async function startScan() {
   if (!NFCSupported) return;
   try {
@@ -768,7 +768,7 @@ function sendToWrite(value, type) {
   switchTab('write');
 }
 
-// ─── Write ────────────────────────────────────────────────
+// Write ------------------
 function updatePreview() {
   const type    = document.getElementById('write-type').value;
   const content = document.getElementById('write-content').value;
@@ -834,7 +834,7 @@ function setWriteStatus(state, msg) {
   document.getElementById('write-status').textContent = msg;
 }
 
-// ─── History ──────────────────────────────────────────────
+// History ---------------
 function addToHistory(entry) {
   readHistory.unshift(entry);
   if (readHistory.length > 100) readHistory.pop();
@@ -865,7 +865,7 @@ function clearHistory() {
   renderHistory();
 }
 
-// ─── Utils ────────────────────────────────────────────────
+// Utils ------------------
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
