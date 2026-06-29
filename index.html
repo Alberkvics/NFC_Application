@@ -755,9 +755,8 @@ async function startWifiWrite() {
 
     await wifiReader.write({
       records: [{ recordType:
-        'mime',
-        mediaType: 'application/vnd.wfa.wsc',
-        data: new TextEncoder().encode(payload)}]
+        'url',
+        data: payload}]
     });
 
     setWifiStatus('success', 'Wi-Fi gravado com sucesso! ✓ Aproxime qualquer celular para conectar.');
