@@ -549,6 +549,7 @@
 
   <button class="btn-main" id="btn-write" onclick="startWrite()">Gravar na tag NFC</button>
   <button class="btn-stop" id="btn-stop-write" onclick="stopWrite()" style="display:none">Cancelar</button>
+  <button class="btn-secondary" id="btn-format" onclick="formatTag()">Formatar tag NFC</button>
 </div>
 
 <!-- HISTORY PANEL -->
@@ -715,37 +716,71 @@ function setCardStatus(state, msg) {
 }
 
 // Wi-Fi -------------
-function wifiEscape(str) {
-  return str.replace(/[\\;,"':]/g, c => '\\' + c);
-}
+function buildWifiTLV(ssid, password, security) {
+  const enc = new TextEncoder();
+  const ssidBytes = enc.encode(ssid);
+  const pwBytes   = enc.encode(password);
 
-function buildWifiPayload() {
-  const ssid     = document.getElementById('wf-ssid').value.trim();
-  const security = document.getElementById('wf-security').value;
-  const password = document.getElementById('wf-password').value;
-  const h = document.getElementById('wf-hidden').checked ? 'true' : 'false';
-  if (!ssid) return '';
-  if (security === 'nopass')
-    return `WIFI:T:nopass;S:${wifiEscape(ssid)};H:${h};;`;
-  return `WIFI:T:${security};S:${wifiEscape(ssid)};P:${wifiEscape(password)};H:${h};;`;
+  // Tipos de autenticação
+  const authMap = { WPA: 0x0022, WEP: 0x0001, nopass: 0x0001 };
+  const auth = authMap[security] ?? 0x0022;
+
+  // Encriptação: AES=0x0008, NONE=0x0001
+  const encr = security === 'nopass' ? 0x0001 : 0x0008;
+
+  function tlv(id, bytes) {
+    const buf = new Uint8Array(4 + bytes.length);
+    buf[0] = (id >> 8) & 0xFF;
+    buf[1] =  id       & 0xFF;
+    buf[2] = (bytes.length >> 8) & 0xFF;
+    buf[3] =  bytes.length       & 0xFF;
+    buf.set(bytes, 4);
+    return buf;
+  }
+
+  function uint16Bytes(val) {
+    return new Uint8Array([(val >> 8) & 0xFF, val & 0xFF]);
+  }
+
+  function concat(...arrays) {
+    const total = arrays.reduce((s, a) => s + a.length, 0);
+    const out = new Uint8Array(total);
+    let offset = 0;
+    for (const a of arrays) { out.set(a, offset); offset += a.length; }
+    return out;
+  }
+
+  const credential = concat(
+    tlv(0x1026, new Uint8Array([0x01])),       // Network Index
+    tlv(0x1045, ssidBytes),                    // SSID
+    tlv(0x1003, uint16Bytes(auth)),             // Auth Type
+    tlv(0x100F, uint16Bytes(encr)),             // Encryption Type
+    tlv(0x1027, pwBytes),                      // Password
+    tlv(0x1020, new Uint8Array([0xFF,0xFF,0xFF,0xFF,0xFF,0xFF])) // MAC
+  );
+
+  return tlv(0x100E, credential); // Credential wrapper
 }
 
 function toggleWifiPw() {
   const nopass = document.getElementById('wf-security').value === 'nopass';
   document.getElementById('wf-pw-field').style.display = nopass ? 'none' : '';
-  updateWifiPreview();
 }
 
 function updateWifiPreview() {
-  const payload = buildWifiPayload();
-  document.getElementById('wifi-raw').textContent = payload || 'Preencha os campos acima…';
-  document.getElementById('btn-wifi-write').disabled = !NFCSupported || !payload;
+  const ssid = document.getElementById('wf-ssid').value.trim();
+  document.getElementById('wifi-raw').textContent = ssid
+    ? `SSID: ${ssid} · formato: WSC TLV binário`
+    : 'Preencha os campos acima…';
+  document.getElementById('btn-wifi-write').disabled = !NFCSupported || !ssid;
 }
 
 async function startWifiWrite() {
   if (!NFCSupported) return;
-  const payload = buildWifiPayload();
-  if (!payload) { setWifiStatus('error', 'Preencha o nome da rede.'); return; }
+  const ssid     = document.getElementById('wf-ssid').value.trim();
+  const security = document.getElementById('wf-security').value;
+  const password = document.getElementById('wf-password').value;
+  if (!ssid) { setWifiStatus('error', 'Preencha o nome da rede.'); return; }
 
   try {
     wifiReader = new NDEFReader();
@@ -754,12 +789,14 @@ async function startWifiWrite() {
     document.getElementById('btn-wifi-stop').style.display  = 'block';
 
     await wifiReader.write({
-      records: [{ recordType:
-        'url',
-        data: payload}]
+      records: [{
+        recordType: 'mime',
+        mediaType:  'application/vnd.wfa.wsc',
+        data:        buildWifiTLV(ssid, password, security)
+      }]
     });
 
-    setWifiStatus('success', 'Wi-Fi gravado com sucesso! ✓ Aproxime qualquer celular para conectar.');
+    setWifiStatus('success', 'Wi-Fi gravado com sucesso! ✓');
     document.getElementById('btn-wifi-write').style.display = 'block';
     document.getElementById('btn-wifi-stop').style.display  = 'none';
     wifiReader = null;
@@ -783,7 +820,6 @@ function setWifiStatus(state, msg) {
   dot.className = 'status-dot' + (state !== 'idle' ? ' ' + state : '');
   document.getElementById('wifi-status').textContent = msg;
 }
-
 
 // Read --------------
 async function startScan() {
@@ -952,6 +988,22 @@ function setWriteStatus(state, msg) {
   const dot = document.getElementById('write-dot');
   dot.className = 'status-dot' + (state !== 'idle' ? ' ' + state : '');
   document.getElementById('write-status').textContent = msg;
+}
+
+async function formatTag() {
+  if(!NFCSupported) return;
+  try {
+    const reader = new NDEFReader();
+    setWriteStatus('writing', 'Aproxime a tag NFC para formatar…');
+    document.getElementById('btn-format').disabled = true;
+
+    await reader.write({ records: [] });
+    setWriteStatus('success', 'Tag formatada com sucesso! ✓');
+  } catch (e) {
+    if (e.name !== 'AbortError') setWriteStatus('error', 'Erro ao formatar: ' + e.message);
+  } finally {
+    document.getElementById('btn-format').disabled = false;
+  }
 }
 
 // History ---------------
